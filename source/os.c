@@ -1,7 +1,7 @@
 /*
  * os.c
  *
- * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of wad2bin (https://github.com/DarkMatterCore/wad2bin).
  *
@@ -21,20 +21,54 @@
 
 #include "os.h"
 
+static bool g_isBigEndian = false, g_endiannessRetrieved = false;
+
+bool os_is_big_endian(void)
+{
+    if (!g_endiannessRetrieved)
+    {
+        g_isBigEndian = (*((u16*)"\0\xff") < 0x100);
+        g_endiannessRetrieved = true;
+    }
+
+    return g_isBigEndian;
+}
+
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
 
 int os_snprintf(os_char_t *out, size_t len, const char *fmt, ...)
 {
-    if (!out || !len || !fmt) return -1;
-    
+    if (!out || !len || !fmt || !*fmt) return -1;
+
     va_list args;
-    char tmp[MAX_PATH] = {0};
-    
+
+    char *fstr = NULL;
+    size_t fstr_sz = 0;
+
+    int ret = -1;
+
     va_start(args, fmt);
-    vsnprintf(tmp, MAX_PATH, fmt, args);
+
+    ret = vsnprintf(NULL, 0, fmt, args);
+    if (ret <= 0) goto end;
+
+    fstr_sz = (size_t)ret;
+    ret = -1;
+
+    fstr = (char*)calloc(sizeof(char), fstr_sz + 1);
+    if (!fstr) goto end;
+
+    ret = vsprintf(fstr, fmt, args);
+    if (ret <= 0) goto end;
+
+    ret = snwprintf(out, len, L"%hs", fstr);
+
+end:
+    if (fstr) free(fstr);
+
     va_end(args);
-    
-    return snwprintf(out, len, L"%hs", tmp);
+
+    return ret;
 }
 
 #endif /* WIN32 || _WIN32 || __WIN32__ || __NT__ */

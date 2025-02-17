@@ -1,7 +1,7 @@
 /*
  * tmd.h
  *
- * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of wad2bin (https://github.com/DarkMatterCore/wad2bin).
  *
@@ -180,7 +180,7 @@ ALWAYS_INLINE u64 tmdGetSignedTitleMetadataHashAreaSize(void *buf)
 
 ALWAYS_INLINE void tmdByteswapTitleMetadataContentRecordFields(TmdContentRecord *content_record)
 {
-    if (!content_record || IS_BIG_ENDIAN) return;
+    if (!content_record || os_is_big_endian()) return;
     content_record->content_id = __builtin_bswap32(content_record->content_id);
     content_record->index = __builtin_bswap16(content_record->index);
     content_record->type = __builtin_bswap16(content_record->type);

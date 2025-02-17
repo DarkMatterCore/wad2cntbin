@@ -1,7 +1,7 @@
 /*
  * os.h
  *
- * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of wad2bin (https://github.com/DarkMatterCore/wad2bin).
  *
@@ -24,7 +24,10 @@
 #ifndef __OS_H__
 #define __OS_H__
 
+#include "types.h"
+
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+#include <windows.h>
 #include <wchar.h>
 #endif
 
@@ -41,12 +44,10 @@
 #define MAX_PATH    1024
 #endif
 
-#define IS_BIG_ENDIAN   (*((u16*)"\0\xff") < 0x100)
-
 /* Conditional byteswap macros to achieve endianness-agnostic integer handling. */
-#define bswap_16(val)   (IS_BIG_ENDIAN ? (val) : __builtin_bswap16((val)))
-#define bswap_32(val)   (IS_BIG_ENDIAN ? (val) : __builtin_bswap32((val)))
-#define bswap_64(val)   (IS_BIG_ENDIAN ? (val) : __builtin_bswap64((val)))
+#define bswap_16(val)   (os_is_big_endian() ? (val) : __builtin_bswap16((val)))
+#define bswap_32(val)   (os_is_big_endian() ? (val) : __builtin_bswap32((val)))
+#define bswap_64(val)   (os_is_big_endian() ? (val) : __builtin_bswap64((val)))
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
 typedef wchar_t os_char_t;   /// UTF-16.
@@ -110,5 +111,7 @@ typedef struct stat os_stat_t;
 #define os_remove                       remove
 #define os_stat                         stat
 #endif /* WIN32 || _WIN32 || __WIN32__ || __NT__ */
+
+bool os_is_big_endian(void);
 
 #endif /* __OS_H__ */

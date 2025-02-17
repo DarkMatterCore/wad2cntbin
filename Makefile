@@ -1,7 +1,8 @@
 TOPDIR	?=	$(CURDIR)
+
 ifeq ($(strip $(wildcard $(TOPDIR)/config.mk)),)
 # config.mk does not exist.
-# read template and safe as config.mk
+# Read template and safe as config.mk.
 $(info Creating config.mk file)
 
 $(file > config.mk,$(file < config.mk.template))
@@ -11,7 +12,9 @@ include $(TOPDIR)/config.mk
 
 PROJECT_NAME	:=	wad2bin
 PROJECT_AUTHOR	:=	DarkMatterCore
-PROJECT_VERSION	:=	0.8
+PROJECT_VERSION	:=	0.9
+
+BUILD_TIMESTAMP	:=	$(strip $(shell date --utc '+%Y-%m-%d %T UTC'))
 
 ifeq ($(strip $(findstring Windows,$(shell uname -s))),)
 TARGET			:=	$(PROJECT_NAME)
@@ -19,12 +22,11 @@ else
 TARGET			:=	$(PROJECT_NAME)$(EXEEXT)
 endif
 
-# allow static build
-BUILD_STATIC ?= 0
+# Allow static build.
+BUILD_STATIC	?= 1
 
 # -Wno-implicit-fallthrough is used to suppress ConvertUTF.c warnings.
 # -Wno-missing-braces is used to suppress "suggest braces around initialization of subobject" warnings under certain compilers.
-
 CFLAGS			:=	-std=gnu11 -fPIC -O2 -Wall -Wextra -Wpedantic -Wno-implicit-fallthrough -Wno-missing-braces -static-libgcc -static-libstdc++ $(INCLUDE)
 LIBS			:=	-lmbedtls -lmbedx509 -lmbedcrypto -lninty-233
 
@@ -34,7 +36,8 @@ LIBS			+= 	-static -s
 endif
 
 CFLAGS			+=	-D_BSD_SOURCE -D_POSIX_SOURCE -D_POSIX_C_SOURCE=200112L -D_DEFAULT_SOURCE -D_FILE_OFFSET_BITS=64
-CFLAGS			+=	-DPROJECT_NAME=\"${PROJECT_NAME}\" -DPROJECT_AUTHOR=\"${PROJECT_AUTHOR}\" -DPROJECT_VERSION=\"${PROJECT_VERSION}\"
+CFLAGS			+=	-DPROJECT_NAME="\"${PROJECT_NAME}\"" -DPROJECT_AUTHOR="\"${PROJECT_AUTHOR}\"" -DPROJECT_VERSION="\"${PROJECT_VERSION}\""
+CFLAGS			+=	-DBUILD_TIMESTAMP="\"${BUILD_TIMESTAMP}\""
 
 BUILD			:=	build
 SOURCES			:=	source
@@ -53,7 +56,7 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir))
 
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(CURDIR)/$(dir))
 
-.PHONY:	$(BUILD) clean clean_full all
+.PHONY:	$(BUILD) clean clean_all all
 
 all:	$(BUILD)
 
@@ -65,11 +68,11 @@ clean:
 	@echo clean ...
 	@rm -fr $(BUILD) $(TARGET)
 
-clean_full:
+clean_all:
 	@echo clean ...
 	@rm -fr $(BUILD) $(TARGET)
-	$(MAKE) -C mbedtls clean
-	$(MAKE) -C ninty-233/build/linux clean
+	-$(MAKE) -C mbedtls clean
+	-$(MAKE) -C ninty-233/build/linux clean
 else
 .PHONY:	all libs src
 

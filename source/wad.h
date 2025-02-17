@@ -1,7 +1,7 @@
 /*
  * wad.h
  *
- * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of wad2bin (https://github.com/DarkMatterCore/wad2bin).
  *
@@ -94,7 +94,7 @@ bool wadGenerateBogusInstallablePackage(os_char_t *out_path, CertificateChain *c
 /// Byteswaps fields from an installable WAD package.
 ALWAYS_INLINE void wadByteswapInstallablePackageHeaderFields(WadInstallablePackageHeader *wad_header)
 {
-    if (!wad_header || IS_BIG_ENDIAN) return;
+    if (!wad_header || os_is_big_endian()) return;
     wad_header->header_size = __builtin_bswap32(wad_header->header_size);
     wad_header->type = __builtin_bswap16(wad_header->type);
     wad_header->version = __builtin_bswap16(wad_header->version);
@@ -108,7 +108,7 @@ ALWAYS_INLINE void wadByteswapInstallablePackageHeaderFields(WadInstallablePacka
 /// Byteswaps fields from a backup WAD package.
 ALWAYS_INLINE void wadByteswapBackupPackageHeaderFields(WadBackupPackageHeader *wad_header)
 {
-    if (!wad_header || IS_BIG_ENDIAN) return;
+    if (!wad_header || os_is_big_endian()) return;
     wad_header->header_size = __builtin_bswap32(wad_header->header_size);
     wad_header->type = __builtin_bswap16(wad_header->type);
     wad_header->version = __builtin_bswap16(wad_header->version);

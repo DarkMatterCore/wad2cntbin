@@ -1,7 +1,7 @@
 /*
  * main.c
  *
- * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of wad2bin (https://github.com/DarkMatterCore/wad2bin).
  *
@@ -23,47 +23,96 @@
 #include "keys.h"
 #include "bin.h"
 
-#define PATH_COUNT       4
-#define NULL_KEY_ARG    "--nullkey"
+#define PATH_COUNT          4                   // keys.txt, device.cert, input WAD, output dir
+
+#define MIN_ARG_COUNT       (PATH_COUNT + 1)    // wad2bin + input paths
+#define MAX_ARG_COUNT       (PATH_COUNT + 4)    // wad2bin + input paths + --skip-bins + parent TID + --nullkey
+
+#define SKIP_BINS_ARG       "--skip-bins"
+#define NULL_KEY_ARG        "--nullkey"
+
+#define SKIP_BINS_ARG_COUNT (MIN_ARG_COUNT + 1)
+
+void usage(char **argv);
+
+int parseBooleanFlag(bool *out, const char *val, const char *flag);
+int parseParentTitleId(u64 *out, const char *val);
 
 int main(int argc, char **argv)
 {
     int ret = 0;
-    
+
     /* Reserve memory for an extra temporary path. */
     os_char_t *paths[PATH_COUNT + 1] = {0};
-    
+
     CertificateChain *cert_chain = NULL;
-    
+
     Ticket *ticket = NULL;
-    
+
     TitleMetadata *tmd = NULL;
     TmdCommonBlock *tmd_common_block = NULL;
-    
+
     u64 title_id = 0, parent_tid = 0;
     u32 required_ios = 0, tid_upper = 0;
-    bool use_null_key = false;
-    
+    bool skip_bins = false, use_null_key = false;
+
     printf("\n" PROJECT_NAME " v" PROJECT_VERSION " (c) " PROJECT_AUTHOR ".\n");
-    printf("Built on: %s %s.\n\n", __TIME__, __DATE__);
-    
-    if (argc < (PATH_COUNT + 1) || argc > (PATH_COUNT + 3) || strlen(argv[1]) >= MAX_PATH || strlen(argv[2]) >= MAX_PATH || strlen(argv[3]) >= MAX_PATH || \
-        (strlen(argv[4]) + SD_CONTENT_PATH_MAX_LENGTH) >= MAX_PATH || (argc >= (PATH_COUNT + 2) && strlen(argv[5]) != 16) || (argc == (PATH_COUNT + 3) && (strlen(argv[6]) != strlen(NULL_KEY_ARG) || \
-        strcmp(argv[6], NULL_KEY_ARG) != 0)))
+    printf("Built on: " BUILD_TIMESTAMP ".\n\n");
+
+    if (argc < MIN_ARG_COUNT || argc > MAX_ARG_COUNT || strlen(argv[1]) >= MAX_PATH || strlen(argv[2]) >= MAX_PATH || strlen(argv[3]) >= MAX_PATH || \
+        (strlen(argv[4]) + SD_CONTENT_PATH_MAX_LENGTH) >= MAX_PATH)
     {
-        printf("Usage: %s <keys.txt> <device.cert> <input WAD> <output dir> [<parent title ID> [" NULL_KEY_ARG "]]\n\n", argv[0]);
-        printf("Paths must not exceed %u characters. Relative paths are supported.\n", MAX_PATH - 1);
-        printf("The required directory tree for the *.bin file(s) will be created at the output directory.\n");
-        printf("You can set your SD card root directory as the output directory.\n\n");
-        printf("Notes about DLC support:\n");
-        printf("* Parent title ID is only required if the input WAD is a DLC. A 16 character long hex string is expected.\n");
-        printf("* If \"" NULL_KEY_ARG "\" is set after the parent title ID, a null key will be used to encrypt DLC content data.\n");
-        printf("  Some older games (like Rock Band 2) depend on this to properly load DLC data when launched via the Disc Channel.\n\n");
-        printf("For more information, please visit: https://github.com/" PROJECT_AUTHOR "/" PROJECT_NAME ".\n\n");
+        usage(argv);
         ret = -1;
         goto out;
     }
-    
+
+    if (argc >= SKIP_BINS_ARG_COUNT)
+    {
+        int idx = (SKIP_BINS_ARG_COUNT - 1);
+
+        /* Try to parse the --skip-bins argument. */
+        ret = parseBooleanFlag(&skip_bins, argv[idx], SKIP_BINS_ARG);
+        if (ret >= 0)
+        {
+            if (argc > SKIP_BINS_ARG_COUNT)
+            {
+                /* Increase argument index, if needed. */
+                idx++;
+            } else {
+                /* Skip parent TID parsing if there's nothing else we can parse. */
+                goto alloc;
+            }
+        } else {
+            /* Print usage message if there's nothing else we can parse. */
+            if (argc == SKIP_BINS_ARG_COUNT)
+            {
+                usage(argv);
+                goto out;
+            }
+        }
+
+        /* Try to parse the parent TID. */
+        ret = parseParentTitleId(&parent_tid, argv[idx++]);
+        if (ret < 0)
+        {
+            usage(argv);
+            goto out;
+        }
+
+        if (argc > idx)
+        {
+            /* Try to parse the --nullkey argument. */
+            ret = parseBooleanFlag(&use_null_key, argv[idx], NULL_KEY_ARG);
+            if (ret < 0)
+            {
+                usage(argv);
+                goto out;
+            }
+        }
+    }
+
+alloc:
     /* Allocate memory for the certificate chain, ticket and TMD. */
     cert_chain = (CertificateChain*)calloc(1, sizeof(CertificateChain));
     ticket = (Ticket*)calloc(1, sizeof(Ticket));
@@ -71,10 +120,10 @@ int main(int argc, char **argv)
     if (!cert_chain || !ticket || !tmd)
     {
         ERROR_MSG("Error allocating memory for certificate chain / ticket / TMD structs!");
-        ret = -2;
+        ret = -6;
         goto out;
     }
-    
+
     /* Generate path buffers. */
     for(u32 i = 0; i <= PATH_COUNT; i++)
     {
@@ -83,10 +132,10 @@ int main(int argc, char **argv)
         if (!paths[i])
         {
             ERROR_MSG("Error allocating memory for path #%u!", i);
-            ret = -3;
+            ret = -7;
             goto out;
         }
-        
+
         if (i == PATH_COUNT)
         {
             /* Save temporary path and create it. */
@@ -98,121 +147,94 @@ int main(int argc, char **argv)
             /* We'll only need to perform manual conversion at this point. */
             if (!utilsConvertUTF8ToUTF16(paths[i], argv[i + 1]))
             {
-                ERROR_MSG("Failed to convert path from UTF-8 to UTF-16!");
-                ret = -4;
+                ERROR_MSG("Failed to convert path from UTF-8 to UTF-16! (\"%s\").", argv[i + 1]);
+                ret = -8;
                 goto out;
             }
 #else
             /* Copy path. */
             os_snprintf(paths[i], MAX_PATH, "%s", argv[i + 1]);
 #endif
-            
+
             /* Check if the output directory string ends with a path separator. */
             /* If so, remove it. */
             u64 path_len = strlen(argv[i + 1]);
             if (i == (PATH_COUNT - 1) && argv[i + 1][path_len - 1] == *((u8*)OS_PATH_SEPARATOR)) paths[i][path_len - 1] = (os_char_t)0;
         }
     }
-    
-    /* Check if the user provided a parent title ID. */
-    if (argc >= (PATH_COUNT + 2))
-    {
-        /* Parse parent title ID. */
-        if (!keysParseHexKey((u8*)&parent_tid, NULL, argv[5], 8, false))
-        {
-            ERROR_MSG("Failed to parse parent title ID!\n");
-            ret = -5;
-            goto out;
-        }
-        
-        /* Byteswap parent title ID. */
-        parent_tid = bswap_64(parent_tid);
-        
-        /* Check if the TID upper u32 is valid. */
-        u32 parent_tid_upper = TITLE_UPPER(parent_tid);
-        if (parent_tid_upper != TITLE_TYPE_DISC_GAME && parent_tid_upper != TITLE_TYPE_DOWNLOADABLE_CHANNEL && parent_tid_upper != TITLE_TYPE_DISC_BASED_CHANNEL)
-        {
-            ERROR_MSG("Invalid parent title ID category! (%08" PRIx32 ").\nOnly disc-based game IDs, downloadable channel IDs and disc-based channel IDs are supported.\n", parent_tid_upper);
-            ret = -6;
-            goto out;
-        }
-        
-        /* Enable null key usage if needed. */
-        use_null_key = (argc == (PATH_COUNT + 3));
-    }
-    
+
     /* Load keydata and device certificate. */
     if (!keysLoadKeyDataAndDeviceCert(paths[0], paths[1]))
     {
-        ret = -7;
+        ret = -9;
         goto out;
     }
-    
+
     printf("Keydata and device certificate successfully loaded.\n\n");
-    
+
     /* Unpack input WAD package. */
     if (!wadUnpackInstallablePackage(paths[2], paths[4], cert_chain, ticket, tmd))
     {
-        ret = -8;
+        ret = -10;
         goto out;
     }
-    
+
     printf("WAD package \"" OS_PRINT_STR "\" successfully unpacked.\n\n", paths[2]);
-    
+
     /* Get TMD common block and retrieve the title ID and required system version. */
     tmd_common_block = tmdGetCommonBlock(tmd->data);
     title_id = bswap_64(tmd_common_block->title_id);
     required_ios = TITLE_LOWER(bswap_64(tmd_common_block->system_version));
-    
+
     /* Start conversion process. */
     tid_upper = TITLE_UPPER(title_id);
     if (tid_upper == TITLE_TYPE_DLC)
     {
         /* Check if a parent title ID was provided. */
-        if (argc < (PATH_COUNT + 2))
+        if (!parent_tid)
         {
             ERROR_MSG("Error: parent title ID not provided! This is required for DLC titles.\n");
-            ret = -9;
+            ret = -11;
             goto out;
         }
-        
+
         /* Check if we're dealing with a DLC that can be converted. */
         if (!binIsDlcTitleConvertible(title_id))
         {
             ERROR_MSG("This DLC package belongs to a game that doesn't support the <index>.bin format!\nConversion process halted.\n");
-            ret = -10;
+            ret = -12;
             goto out;
         }
-        
+
         /* Generate <index>.bin file(s). */
-        if (!binGenerateIndexedPackagesFromUnpackedInstallableWadPackage(paths[4], paths[3], tmd, parent_tid, use_null_key))
+        if (!binGenerateIndexedPackagesFromUnpackedInstallableWadPackage(paths[4], paths[3], tmd, parent_tid, skip_bins, use_null_key))
         {
             ret = -11;
             goto out;
         }
     } else {
         /* Generate content.bin file. */
-        if (!binGenerateContentBinFromUnpackedInstallableWadPackage(paths[4], paths[3], tmd))
+        if (!binGenerateContentBinFromUnpackedInstallableWadPackage(paths[4], paths[3], tmd, skip_bins))
         {
             ret = -12;
             goto out;
         }
     }
-    
+
     /* Generate bogus installable WAD package. */
     if (!wadGenerateBogusInstallablePackage(paths[3], cert_chain, ticket, tmd))
     {
         ret = -13;
         goto out;
     }
-    
+
     printf("Process finished!\n\n");
-    
+
     /* Print message about needing a patched IOS. */
     if (!ticket->valid_sig || !tmd->valid_sig)
     {
         printf("The signature from the ticket/TMD in the provided WAD package isn't valid.\n");
-        
+
         if (tid_upper == TITLE_TYPE_DLC)
         {
             if (use_null_key)
@@ -228,7 +250,7 @@ int main(int argc, char **argv)
         }
     } else {
         printf("Both ticket/TMD signatures are valid.\n");
-        
+
         if (tid_upper == TITLE_TYPE_DLC)
         {
             printf("This DLC should work right away on your console without having to launch the game using a cIOS, nor having to\n");
@@ -237,39 +259,97 @@ int main(int argc, char **argv)
             printf("This channel should work right away on your console without having to install a patched System Menu IOS.\n\n");
         }
     }
-    
+
     if (tid_upper == TITLE_TYPE_DLC) printf("If it doesn't work anyway, try converting the DLC %s \"" NULL_KEY_ARG "\".\n\n", (use_null_key ? "without" : "with"));
-    
+
     printf("Remember to install the generated bogus WAD file! If it doesn't work, try uninstalling it first (for real).\n\n");
-    
+
 out:
     if (ret < 0 && ret != -1) printf("Process failed!\n\n");
-    
+
     if (tmd)
     {
         tmdFreeTitleMetadata(tmd);
         free(tmd);
     }
-    
+
     if (ticket)
     {
         tikFreeTicket(ticket);
         free(ticket);
     }
-    
+
     if (cert_chain)
     {
         certFreeCertificateChain(cert_chain);
         free(cert_chain);
     }
-    
+
     /* Remove unpacked WAD directory. */
     if (paths[4]) utilsRemoveDirectoryRecursively(paths[4]);
-    
+
     for(u32 i = 0; i <= PATH_COUNT; i++)
     {
         if (paths[i]) free(paths[i]);
     }
-    
+
     return ret;
+}
+
+void usage(char **argv)
+{
+    printf("Usage: %s <keys.txt> <device.cert> <input WAD> <output dir> [" SKIP_BINS_ARG "] [<parent title ID> [" NULL_KEY_ARG "]]\n\n", argv[0]);
+
+    printf("Paths must not exceed %u characters. Relative paths are supported.\n", MAX_PATH - 1);
+    printf("The required directory tree for the *.bin file(s) will be created at the output directory.\n");
+    printf("You can set your SD card root directory as the output directory.\n\n");
+
+    printf("If \"" SKIP_BINS_ARG "\" is provided, *.bin file generation will be skipped if a corresponding *.bin file already\n");
+    printf("exists at the output path.\n\n");
+
+    printf("Notes about DLC support:\n\n");
+
+    printf("* Parent title ID is only required if the input WAD is a DLC. A 16 character long hex string is expected.\n");
+    printf("* If \"" NULL_KEY_ARG "\" is set after the parent title ID, a null key will be used to encrypt DLC content data.\n");
+    printf("  Some older games (like Rock Band 2) depend on this to properly load DLC data when launched via the Disc Channel.\n\n");
+
+    printf("For more information, please visit: https://github.com/" PROJECT_AUTHOR "/" PROJECT_NAME ".\n");
+}
+
+int parseBooleanFlag(bool *out, const char *val, const char *flag)
+{
+    if (strcmp(val, flag) != 0)
+    {
+        *out = false;
+        return -2;
+    }
+
+    *out = true;
+
+    return 0;
+}
+
+int parseParentTitleId(u64 *out, const char *val)
+{
+    if (strlen(val) != 16) return -3;
+
+    /* Parse parent title ID. */
+    if (!keysParseHexKey((u8*)out, NULL, val, sizeof(u64), false))
+    {
+        ERROR_MSG("Failed to parse parent title ID! (\"%s\").\n", val);
+        return -4;
+    }
+
+    /* Byteswap parent title ID. */
+    *out = bswap_64(*out);
+
+    /* Check if the TID upper u32 is valid. */
+    u32 parent_tid_upper = TITLE_UPPER(*out);
+    if (parent_tid_upper != TITLE_TYPE_DISC_GAME && parent_tid_upper != TITLE_TYPE_DOWNLOADABLE_CHANNEL && parent_tid_upper != TITLE_TYPE_DISC_BASED_CHANNEL)
+    {
+        ERROR_MSG("Invalid parent title ID category! (%08" PRIx32 ").\nOnly disc-based game IDs, downloadable channel IDs and disc-based channel IDs are supported.\n", parent_tid_upper);
+        return -5;
+    }
+
+    return 0;
 }

@@ -1,7 +1,7 @@
 /*
  * bin.h
  *
- * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of wad2bin (https://github.com/DarkMatterCore/wad2bin).
  *
@@ -86,9 +86,9 @@ typedef struct {
 bool binIsDlcTitleConvertible(u64 tid);
 
 /// Generates a content.bin file using an unpacked WAD data directory and TMD data loaded into memory.
-bool binGenerateContentBinFromUnpackedInstallableWadPackage(os_char_t *unpacked_wad_path, os_char_t *out_path, TitleMetadata *tmd);
+bool binGenerateContentBinFromUnpackedInstallableWadPackage(os_char_t *unpacked_wad_path, os_char_t *out_path, TitleMetadata *tmd, bool skip_bins);
 
 /// Generates <index>.bin file(s) using an unpacked WAD data directory, TMD data loaded into memory and a parent title ID.
-bool binGenerateIndexedPackagesFromUnpackedInstallableWadPackage(os_char_t *unpacked_wad_path, os_char_t *out_path, TitleMetadata *tmd, u64 parent_tid, bool use_null_key);
+bool binGenerateIndexedPackagesFromUnpackedInstallableWadPackage(os_char_t *unpacked_wad_path, os_char_t *out_path, TitleMetadata *tmd, u64 parent_tid, bool skip_bins, bool use_null_key);
 
 #endif /* __BIN_H__ */

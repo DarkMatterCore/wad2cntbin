@@ -1,7 +1,7 @@
 /*
  * u8.h
  *
- * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of wad2bin (https://github.com/DarkMatterCore/wad2bin).
  *
@@ -82,7 +82,7 @@ u8 *u8LoadFileDataFromU8ArchiveByPath(FILE *u8_fd, const char *file_path, u64 *o
 /// Byteswaps fields from an U8 header.
 ALWAYS_INLINE void u8ByteswapHeaderFields(U8Header *u8_header)
 {
-    if (!u8_header || IS_BIG_ENDIAN) return;
+    if (!u8_header || os_is_big_endian()) return;
     u8_header->magic = __builtin_bswap32(u8_header->magic);
     u8_header->root_node_offset = __builtin_bswap32(u8_header->root_node_offset);
     u8_header->node_info_block_size = __builtin_bswap32(u8_header->node_info_block_size);
@@ -92,7 +92,7 @@ ALWAYS_INLINE void u8ByteswapHeaderFields(U8Header *u8_header)
 /// Byteswaps fields from an U8 node.
 ALWAYS_INLINE void u8ByteswapNodeFields(U8Node *u8_node)
 {
-    if (!u8_node || IS_BIG_ENDIAN) return;
+    if (!u8_node || os_is_big_endian()) return;
     /* Perform a bitwise left shift to make the byteswap return the desired result. */
     u8_node->properties.name_offset = __builtin_bswap32(u8_node->properties.name_offset << 8);
     u8_node->data_offset = __builtin_bswap32(u8_node->data_offset);
