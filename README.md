@@ -6,13 +6,17 @@ Usage:
 --------------
 
 ```
-wad2bin <keys.txt> <device.cert> <input WAD> <output dir> [<parent title ID> [--nullkey]]
+Usage: wad2bin <keys.txt> <device.cert> <input WAD> <output dir> [--skip-bins] [<parent title ID> [--nullkey]]
 
 Paths must not exceed 259 characters. Relative paths are supported.
 The required directory tree for the *.bin file(s) will be created at the output directory.
 You can set your SD card root directory as the output directory.
 
+If "--skip-bins" is provided, *.bin file generation will be skipped if a corresponding *.bin file already
+exists at the output path.
+
 Notes about DLC support:
+
 * Parent title ID is only required if the input WAD is a DLC. A 16 character long hex string is expected.
 * If "--nullkey" is set after the parent title ID, a null key will be used to encrypt DLC content data.
   Some older games (like Rock Band 2) depend on this to properly load DLC data when launched via the Disc Channel.
@@ -78,6 +82,8 @@ The title ID from the parent game must be provided as an additional command line
     * `00010005-735A44xx` (`sZDx`).
     * `00010005-735A45xx` (`sZEx`).
     * `00010005-735A46xx` (`sZFx`).
+    * `00010005-735A47xx` (`sZGx`) (custom DLC generation).
+    * `00010005-735A48xx` (`sZHx`) (custom DLC generation).
 
 * The Beatles: Rock Band (`00010000-52394Axx`) (`R9Jx`):
     * `00010005-72394Axx` (`r9Jx`).
@@ -152,10 +158,19 @@ wad2bin is licensed under GPLv3 or (at your option) any later version.
 Changelog:
 --------------
 
+**v0.9:**
+
+* bin: add support for the new `--skip-bins` option, which will completely skip .bin file generation if a file is already available at the expected output path. Applies to both `content.bin` (regular) and `<index>.bin` (DLC) conversion procedures.
+* bin: add support for two custom Rock Band 2 DLC generations: `00010005-735A47xx` (`sZGx`) and `00010005-735A48xx` (`sZHx`).
+* os: add `os_is_big_endian()`, which retrieves the system endianness if it hasn't been retrieved yet and returns its value. Replaces previous `IS_BIG_ENDIAN` macro.
+* os: update Windows-specific `os_snprintf()` to properly allocate memory for a fully formatted string before copying its contents to the output buffer.
+* Makefile: generate and define a UTC timestamp at build time instead of using the `__TIME__` and `__DATE__` macros.
+* Makefile: prefer static build generation by default.
+
 **v0.8:**
 
 * Print `errno` values as part of error messages whenever possible.
-* Use GCC `format` function attribute on `utilsPrintErrorMessage()`. 
+* Use GCC `format` function attribute on `utilsPrintErrorMessage()`.
 
 **v0.7:**
 
